@@ -64,6 +64,7 @@ Check node:
         # Sees: https://github.com/saltstack/salt/issues/28503
         service_cidr: {{ pillar.networks.service }}
         roles: {{ pillar.metalk8s.nodes[node_name].roles }}
+        folder: "/var/lib/containerd"
     - failhard: true
     - require:
       - metalk8s: Refresh grains

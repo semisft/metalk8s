@@ -4,9 +4,10 @@ Execution module for handling MetalK8s checks.
 """
 
 import ipaddress
+import os
 import re
 
-from salt.exceptions import CheckError
+from salt.exceptions import CheckError, CommandExecutionError
 
 __virtualname__ = "metalk8s_checks"
 
@@ -43,6 +44,13 @@ def node(raises=True, **kwargs):
     ports_ret = __salt__["metalk8s_checks.ports"](raises=False, **kwargs)
     if ports_ret is not True:
         errors.append(ports_ret)
+
+    # Run `containerd filesystem checks`
+    fs_checks = __salt__["metalk8s_checks.containerd_filesystem"](
+        raises=False, **kwargs
+    )
+    if fs_checks is not True:
+        errors.append(fs_checks)
 
     # Run `route_exists` check for the Service Cluster IPs
     service_cidr = kwargs.pop(
@@ -180,7 +188,7 @@ def ports(
     raises=True,
     listening_process_per_role=None,
     roles=None,
-    **kwargs
+    **kwargs,
 ):
     """Check if an unexpected process already listening on a port on the machine,
     return a string (or raise if `raises` is set to `True`) with the list of
@@ -431,6 +439,23 @@ def route_exists(destination, raises=True):
     if error and raises:
         raise CheckError(error)
 
+    return error or True
+
+
+def containerd_filesystem(folder=None, raises=True, **kwargs):
+    error = None
+    folder = folder or "/var/lib/containerd"
+    while not os.path.exists(folder):
+        folder = os.path.dirname(folder)
+    try:
+        infos = __salt__["xfs.info"](folder)
+        ftype = infos["naming"]["ftype"]
+        if ftype != "1":
+            error = f"XFS filesystem has ftype={ftype} expected 1"
+    except CommandExecutionError:
+        error = f"{folder} is not on an XFS"
+    if error and raises:
+        raise CheckError(error)
     return error or True
 
 
